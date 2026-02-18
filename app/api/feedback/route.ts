@@ -8,13 +8,22 @@ export async function POST(req: Request) {
     await dbConnect();
     const data = await req.json();
     
+    // Convert topicsCovered from string to array if it's a string
+    if (typeof data.topicsCovered === 'string') {
+      data.topicsCovered = data.topicsCovered
+        .split(',')
+        .map((topic: string) => topic.trim())
+        .filter((topic: string) => topic.length > 0);
+    }
+    
     const feedback = await Feedback.create(data); // enforce feedback schema
     return NextResponse.json(feedback, { status: 201 });
 
   } catch (error) {
-    console.log(error)
+    console.error('Error creating feedback:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Failed to create feedback';
     return NextResponse.json(
-      { error: 'Failed to create feedback' },
+      { error: errorMessage },
       { status: 500 }
     );
   }

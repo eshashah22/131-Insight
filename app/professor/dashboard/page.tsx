@@ -138,13 +138,19 @@ export default function ProfessorDashboard() {
       const data = await response.json();
       
       if (!data || !data.summary) {
+        // If there's an error message in the response, show it
+        if (data?.error) {
+          throw new Error(data.error);
+        }
         throw new Error("Invalid response format");
       }
       
       setLastClassSummary(data.summary);
     } catch (error) {
       console.error("Error fetching summary:", error);
-      setLastClassSummary("Unable to generate summary at this time.");
+      // Show the actual error message if available
+      const errorMessage = error instanceof Error ? error.message : "Unable to generate summary at this time.";
+      setLastClassSummary(`Error: ${errorMessage}`);
     }
   };
 
