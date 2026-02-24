@@ -33,12 +33,18 @@ import {
   estimateToNumber,
 } from "./schema";
 import { useRouter } from "next/navigation";
+import { getCurrentSemester, getSemesterFromDate } from "@/lib/semester";
 
 //TODO: implement dating so form expires for a class at some point
 //TODO: implement scheduled lambda handler to replace all data points with just averages and summaries,EXCEPT urgent matters
 export default function TAFeedbackForm() {
   const { toast } = useToast();
   const router = useRouter();
+
+  // Get current semester and year
+  const currentSemesterCode = getCurrentSemester();
+  const [semester, yearStr] = currentSemesterCode.split(' ');
+  const currentYear = parseInt(yearStr);
 
   // define form with default vals set to Elias and 131 for now
   const form = useForm<FeedbackFormData>({
@@ -47,6 +53,8 @@ export default function TAFeedbackForm() {
       taName: "",
       courseCode: "CMSC131",
       professorName: "Elias Gonzalez",
+      semester: semester as "Fall" | "Spring" | "Summer",
+      year: currentYear,
       attendanceType: "exact",
       attendanceCount: 0,
       attendanceEstimate: "medium",
@@ -186,6 +194,52 @@ export default function TAFeedbackForm() {
                           </SelectItem>
                         </SelectContent>
                       </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="semester"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Semester</FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select semester" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="Fall">Fall</SelectItem>
+                          <SelectItem value="Spring">Spring</SelectItem>
+                          <SelectItem value="Summer">Summer</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="year"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Year</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          placeholder="2024"
+                          {...field}
+                          value={field.value || ""}
+                          onChange={(e) => field.onChange(parseInt(e.target.value) || currentYear)}
+                        />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}

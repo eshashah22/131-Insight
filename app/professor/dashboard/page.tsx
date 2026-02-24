@@ -16,6 +16,7 @@ import Link from "next/link";
 import { DateRange } from "react-day-picker";
 import { addDays, format, isWithinInterval, startOfDay } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
+import { getCurrentSemester, getSemesterDateRange, getSemesterFromDate, type SemesterCode } from "@/lib/semester";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -42,6 +43,10 @@ interface Feedback {
   overview: string;
   suggestions?: string;
   needsAttention: boolean;
+  sentimentScore?: number;
+  sentimentLabel?: 'positive' | 'neutral' | 'negative';
+  semester?: string;
+  year?: number;
 }
 
 //TODO: prof should be able to dismiss urgent matters and they should be removed from db
@@ -51,6 +56,8 @@ export default function ProfessorDashboard() {
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
   const [loading, setLoading] = useState(true);
   const [dataReady, setDataReady] = useState(false); // only fetch summary when ready
+  const currentSemester = getCurrentSemester();
+  const [selectedSemester, setSelectedSemester] = useState<SemesterCode | "all">(currentSemester);
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: addDays(new Date(), -30),
     to: new Date(),
@@ -58,18 +65,79 @@ export default function ProfessorDashboard() {
 
   const [lastClassSummary, setLastClassSummary] = useState<string>(""); // to concat recent feedbacks and call api on
 
+  // Get available semesters from feedback data (use stored semester/year fields)
+  const availableSemesters = useMemo(() => {
+    const semesterSet = new Set<string>();
+    feedbacks.forEach(f => {
+      if (f.semester && f.year) {
+        semesterSet.add(`${f.semester} ${f.year}`);
+      }
+    });
+    // Also add semesters calculated from dates for backwards compatibility
+    feedbacks.forEach(f => {
+      const dateSemester = getSemesterFromDate(new Date(f.date));
+      semesterSet.add(dateSemester);
+    });
+    return Array.from(semesterSet).sort().reverse(); // Most recent first
+  }, [feedbacks]);
+
+  // First, fetch all feedbacks to populate available semesters
+  useEffect(() => {
+    const fetchAllFeedbacks = async () => {
+      try {
+        const params = new URLSearchParams({
+          professorName: professorName,
+          courseCode: "CMSC131",
+        });
+        const response = await fetch(`/api/feedback?${params.toString()}`);
+        if (response.ok) {
+          const data = await response.json();
+          // Update available semesters from all feedbacks
+          const semesterSet = new Set<string>();
+          data.forEach((f: Feedback) => {
+            if (f.semester && f.year) {
+              semesterSet.add(`${f.semester} ${f.year}`);
+            }
+          });
+        }
+      } catch (error) {
+        console.error("Error fetching all feedbacks:", error);
+      }
+    };
+
+    if (professorName) {
+      fetchAllFeedbacks();
+    }
+  }, [professorName]);
+
   useEffect(() => {
     const fetchFeedback = async () => {
       try {
-        // get feedback for specific name and class
-        //TODO: add dropdown for which class and teacher
-        const response = await fetch(
-          `/api/feedback?professorName=${encodeURIComponent(
-            professorName
-          )}&courseCode=CMSC131`
-        );
+        setLoading(true);
+        // Build query params
+        const params = new URLSearchParams({
+          professorName: professorName,
+          courseCode: "CMSC131",
+        });
+        
+        if (selectedSemester !== "all") {
+          const [semester, year] = selectedSemester.split(' ');
+          params.append('semester', semester);
+          params.append('year', year);
+          console.log('Filtering by semester:', semester, 'year:', year);
+        }
+        
+        const response = await fetch(`/api/feedback?${params.toString()}`);
         if (!response.ok) throw new Error("Failed to fetch feedback");
         const data = await response.json();
+        console.log('Fetched feedbacks:', data.length, 'items');
+        if (data.length > 0) {
+          console.log('Sample feedback:', { 
+            semester: data[0].semester, 
+            year: data[0].year,
+            date: data[0].date
+          });
+        }
         setFeedbacks(data);
       } catch (error) {
         console.error("Error fetching feedback:", error);
@@ -81,7 +149,15 @@ export default function ProfessorDashboard() {
     if (professorName) {
       fetchFeedback();
     }
-  }, [professorName, dateRange]);
+  }, [professorName, selectedSemester]);
+
+  // Update date range when semester changes
+  useEffect(() => {
+    if (selectedSemester !== "all") {
+      const { start, end } = getSemesterDateRange(selectedSemester);
+      setDateRange({ from: start, to: end });
+    }
+  }, [selectedSemester]);
 
   // FIXME show sorted, with Urgent ones first
   // only show data based on range selected
@@ -231,17 +307,35 @@ export default function ProfessorDashboard() {
       </Link>
 
       <div className="flex justify-between items-center mb-8">
-        <div>
-          <h1 className="text-3xl font-bold">Professor Dashboard</h1>
-          <Select onValueChange={setProfessorName} value={professorName}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select professor" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Elias Gonzalez">Elias Gonzalez</SelectItem>
-              <SelectItem value="Pedram Sadeghian">Pedram Sadeghian</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="flex gap-4 items-end">
+          <div>
+            <h1 className="text-3xl font-bold mb-2">Professor Dashboard</h1>
+            <div className="flex gap-2">
+              <Select onValueChange={setProfessorName} value={professorName}>
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="Select professor" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Elias Gonzalez">Elias Gonzalez</SelectItem>
+                  <SelectItem value="Pedram Sadeghian">Pedram Sadeghian</SelectItem>
+                </SelectContent>
+              </Select>
+              
+              <Select onValueChange={(value) => setSelectedSemester(value as SemesterCode | "all")} value={selectedSemester}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Select semester" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Semesters</SelectItem>
+                  {availableSemesters.map((semester) => (
+                    <SelectItem key={semester} value={semester}>
+                      {semester}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </div>
 
         <Popover>
@@ -280,7 +374,7 @@ export default function ProfessorDashboard() {
         </Popover>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <Card>
           <CardHeader>
             <CardTitle>Urgent Matters</CardTitle>
@@ -300,6 +394,40 @@ export default function ProfessorDashboard() {
             <p className="text-3xl font-bold">
               {averageEngagement.toFixed(1)}/5
             </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Avg. Sentiment</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {(() => {
+              const feedbacksWithSentiment = sortedFeedbacks.filter(f => f.sentimentScore !== undefined);
+              const avgSentiment = feedbacksWithSentiment.length > 0
+                ? feedbacksWithSentiment.reduce((acc, curr) => acc + (curr.sentimentScore || 0), 0) / feedbacksWithSentiment.length
+                : null;
+              const sentimentLabel = avgSentiment !== null
+                ? (avgSentiment > 0.2 ? 'positive' : avgSentiment < -0.2 ? 'negative' : 'neutral')
+                : null;
+              
+              return avgSentiment !== null ? (
+                <div>
+                  <p className="text-3xl font-bold">
+                    {avgSentiment.toFixed(2)}
+                  </p>
+                  <p className={`text-sm mt-1 ${
+                    sentimentLabel === 'positive' ? 'text-green-600' :
+                    sentimentLabel === 'negative' ? 'text-red-600' :
+                    'text-gray-600'
+                  }`}>
+                    {sentimentLabel}
+                  </p>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No sentiment data</p>
+              );
+            })()}
           </CardContent>
         </Card>
       </div>
@@ -398,15 +526,33 @@ export default function ProfessorDashboard() {
                     <div>
                       <h3 className="font-semibold">{feedback.courseCode}</h3>
                       <p className="text-sm text-muted-foreground">
-                        {feedback.taName} -{" "}
-                        {format(new Date(feedback.date), "PPP")}
+                        {feedback.taName} - {format(new Date(feedback.date), "PPP")}
+                        {feedback.semester && feedback.year && (
+                          <span className="ml-2 text-xs">({feedback.semester} {feedback.year})</span>
+                        )}
                       </p>
                     </div>
-                    {feedback.needsAttention && (
-                      <span className="bg-primary/10 text-primary text-sm px-2 py-1 rounded">
-                        Needs Attention
-                      </span>
-                    )}
+                    <div className="flex gap-2 items-center">
+                      {feedback.sentimentLabel && (
+                        <span className={`text-xs px-2 py-1 rounded ${
+                          feedback.sentimentLabel === 'positive' 
+                            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                            : feedback.sentimentLabel === 'negative'
+                            ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                            : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
+                        }`}>
+                          {feedback.sentimentLabel}
+                          {feedback.sentimentScore !== undefined && (
+                            <span className="ml-1">({feedback.sentimentScore.toFixed(2)})</span>
+                          )}
+                        </span>
+                      )}
+                      {feedback.needsAttention && (
+                        <span className="bg-primary/10 text-primary text-sm px-2 py-1 rounded">
+                          Needs Attention
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <p className="text-sm mb-2">
                     <strong>Topics:</strong> {feedback.topicsCovered.join(", ")}

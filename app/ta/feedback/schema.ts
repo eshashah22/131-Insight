@@ -4,6 +4,8 @@ export const feedbackFormSchema = z.object({
   taName: z.string().min(2, "Name must be at least 2 characters"),
   courseCode: z.enum(["CMSC131", "CMSC132"]),
   professorName: z.enum(["Elias Gonzalez", "Pedram Sadeghian"]),
+  semester: z.enum(["Fall", "Spring", "Summer"]),
+  year: z.number().min(2020).max(2100),
   attendanceType: z.enum(["exact", "estimate"]),
   attendanceCount: z.number().min(0, "Attendance must be 0 or greater").optional(),
   attendanceEstimate: z.enum(["low", "medium", "high"]).optional(),
