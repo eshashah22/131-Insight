@@ -261,3 +261,36 @@ export async function GET(req: Request) {
     );
   }
 }
+
+// delete a specific feedback entry by id
+export async function DELETE(req: Request) {
+  try {
+    await dbConnect();
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json(
+        { error: 'Feedback id is required' },
+        { status: 400 }
+      );
+    }
+
+    const deleted = await Feedback.findByIdAndDelete(id);
+
+    if (!deleted) {
+      return NextResponse.json(
+        { error: 'Feedback not found' },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({ success: true }, { status: 200 });
+  } catch (error) {
+    console.error('Error deleting feedback:', error);
+    return NextResponse.json(
+      { error: 'Failed to delete feedback' },
+      { status: 500 }
+    );
+  }
+}

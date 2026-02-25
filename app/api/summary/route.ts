@@ -49,7 +49,7 @@ export async function POST(req: Request) {
           "frequency_penalty": 0,
           "temperature": 0.6,
           messages: [
-            { role: "user", content: "Concisely summarize these TA observations into a single line focused on student comprehension and engagement, without any commentary:" },
+            { role: "user", content: "Concisely summarize these TA observations into a single line focused on student comprehension and engagement, without any commentary. Make it simple, no challenging vocabulary." },
             { role: "assistant", content: "I will provide a single-line summary focused on student comprehension and engagement." },
             { role: "user", content: feedbackText }
           ]

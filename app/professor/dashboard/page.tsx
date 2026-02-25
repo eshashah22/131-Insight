@@ -296,6 +296,20 @@ export default function ProfessorDashboard() {
       : 0;
   }, [sortedFeedbacks]);
 
+  const handleDeleteFeedback = async (id: string) => {
+    try {
+      const response = await fetch(`/api/feedback?id=${id}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        throw new Error("Failed to delete feedback");
+      }
+      setFeedbacks((prev) => prev.filter((f) => f._id !== id));
+    } catch (error) {
+      console.error("Error deleting feedback:", error);
+    }
+  };
+
   return (
     <div className="container mx-auto px-4 py-8">
       <Link
@@ -552,6 +566,13 @@ export default function ProfessorDashboard() {
                           Needs Attention
                         </span>
                       )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDeleteFeedback(feedback._id)}
+                      >
+                        Delete
+                      </Button>
                     </div>
                   </div>
                   <p className="text-sm mb-2">
